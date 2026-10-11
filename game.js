@@ -29,7 +29,7 @@ const G = {
   t: 0, scene: 'title', bossIdx: 0, total: 0, sceneT: 0,
   hero: newAnim(), boss: newAnim(), pad: { hihat: 0, kick: 0, snare: 0, tom: 0 },
   shake: 0, particles: [], floats: [], projectiles: [], bubbles: { hero: null, boss: null },
-  B: null, last: null, champFanfare: false,
+  B: null, J: null, last: null, champFanfare: false,
 };
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -456,6 +456,8 @@ function toScene(s) {
     resetFx(); G.B = null;
     say('boss', cfgNow().lines.intro[0]);
   }
+  if (s === 'jam') { resetFx(); G.B = null; G.J = newJam(); setJamStage(G.J, 0); }
+  if (s !== 'jam') G.J = null;
   if (s === 'champion') { G.bubbles = { hero: null, boss: null }; confetti(200); sound.fanfare(); }
 }
 function startBattle() {
@@ -480,6 +482,7 @@ function drumPress(d) {
   sound.drum(d, now, { dull: true });
   G.hero[d] = 1; G.pad[d] = 1;
   if (G.scene === 'battle' && G.B && G.B.state === 'play') judgePress(G.B, d, now);
+  if (G.scene === 'jam' && G.J) jamPress(G.J, d, now);
 }
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
@@ -489,6 +492,15 @@ window.addEventListener('keydown', (e) => {
   if (KEYS[k]) { e.preventDefault(); drumPress(KEYS[k]); return; }
   if (k === ' ' || k === 'enter') { e.preventDefault(); advance(); return; }
   if (k === 'm') { sound.toggleMute(); return; }
+  if (k === 'q' && G.scene === 'title') { toScene('jam'); return; }
+  if (G.scene === 'jam' && G.J) {
+    const J = G.J;
+    if (k === 'arrowleft' || k === 'arrowright') { e.preventDefault(); setJamStage(J, J.stage + (k === 'arrowright' ? 1 : -1)); return; }
+    if (k === 'arrowup' || k === 'arrowdown') { e.preventDefault(); jamSetBpm(J, J.bpm + (k === 'arrowup' ? 5 : -5)); return; }
+    if (k === 'b') { J.groove = !J.groove; return; }
+    if (k === 'r') { jamRecord(J); return; }
+    if (k === 'c') { J.loop = []; J.rec = null; floatText('LOOP CLEARED', 640, 300, '#ff4d6d', 40); return; }
+  }
   if (k === 'escape') { if (G.scene !== 'title') toScene('title'); }
 });
 window.addEventListener('pointerdown', () => { sound.init(); advance(); });
@@ -524,7 +536,7 @@ function drawTitle() {
   ctx.save(); ctx.translate(640, 440); ctx.scale(pulse, pulse);
   T('PRESS SPACE TO START', 0, 0, 56, '#ff4d6d', { align: 'center', base: 'middle', lw: 10 });
   ctx.restore();
-  T('Try the drums! Jam on D F J K', 640, 500, 24, '#ffd9a0', { align: 'center', base: 'middle', lw: 5 });
+  T('Q = FREE-PLAY JAM MODE', 640, 500, 30, '#69db7c', { align: 'center', base: 'middle', lw: 6 });
   T('M = mute', 1250, 700, 22, '#fff', { align: 'right', base: 'middle', lw: 5 });
   drawPads(null);
 }
@@ -721,6 +733,130 @@ function drawChampion() {
   drawFx();
 }
 
+
+// ───────────────────────── jam mode (free play) ─────────────────────────
+const JAM_STAGES = ['garage', 'alley', 'disco', 'lab', 'volcano'];   // stage i>0 ↔ BOSSES[i-1]
+const JAM_STEPS = 32;                                               // 2-bar loop, 16th-note grid
+const JAM_LINES = {
+  raccoon: ['...Okay, that slaps.', "Don't tell anyone I'm vibing.", 'Fine. FINE. It grooves.'],
+  octopus: ['Ooh, sugar, THAT is funky!', 'All eight arms are dancing!', 'Disco approves, darling!'],
+  robot: ['GROOVE LEVEL: ACCEPTABLE.', 'BEEP BOOP. I AM DANCING.', 'TEMPO: DELICIOUS.'],
+  volcano: ['THE MOUNTAIN... GROOVES!', 'RUMBLE! YES! MORE!', 'THIS BEAT IS LAVA-HOT!'],
+};
+const jamBoss = (J) => (J.stage > 0 ? BOSSES[J.stage - 1] : null);
+function newJam() {
+  return { stage: 0, bpm: 100, groove: true, start: sound.now + 0.1, nextStep: 0,
+    loop: [], rec: null, events: [], hits: 0, hype: 0, cheerAt: 0 };
+}
+const jamSd = (J) => 60 / J.bpm / 4;
+const jamStepF = (J, t) => (t - J.start) / jamSd(J);
+function jamScheduler(J, now) {
+  const sd = jamSd(J), boss = jamBoss(J);
+  const bassline = boss ? boss.bassline : [0, 0, 7, 5], root = boss ? boss.root : 55;
+  while (J.start + J.nextStep * sd < now + 0.2) {
+    const i = J.nextStep, t = J.start + i * sd, pos = i % JAM_STEPS;
+    if (J.groove && i % 4 === 0) {
+      const beat = i / 4;
+      sound.click(t, beat % 4 === 0, 0.22);
+      sound.bass(t, bassline[beat % bassline.length], root, sd * 3.2);
+    }
+    for (const n of J.loop) if (n.pos === pos) { sound.drum(n.drum, t, { dull: true, vol: 0.8 }); J.events.push({ t, drum: n.drum }); }
+    J.nextStep++;
+  }
+}
+function jamSetBpm(J, bpm) {
+  const now = sound.now, f = jamStepF(J, now);
+  J.bpm = clamp(bpm, 60, 170);
+  J.start = now - f * jamSd(J);
+}
+function jamRecord(J) {
+  if (J.rec) { J.rec = null; return; }                       // R again = stop early
+  J.groove = true;
+  const f = jamStepF(J, sound.now);
+  const startStep = Math.ceil(f / 16) * 16;                   // next bar line
+  J.rec = { from: startStep, to: startStep + JAM_STEPS };
+}
+function jamPress(J, d, now) {
+  J.hits++; J.hype = Math.min(1, J.hype + 0.06);
+  if (J.rec) {
+    const f = jamStepF(J, now - sound.latency()), step = Math.round(f);
+    if (step >= J.rec.from - 0.5 && step < J.rec.to) {
+      const pos = ((step % JAM_STEPS) + JAM_STEPS) % JAM_STEPS;
+      if (!J.loop.some((n) => n.pos === pos && n.drum === d)) J.loop.push({ pos, drum: d });
+    }
+  }
+  const boss = jamBoss(J);
+  if (boss && J.hype > 0.6 && G.t > J.cheerAt) {
+    J.cheerAt = G.t + 6;
+    say('boss', pick(JAM_LINES[boss.key]));
+  }
+}
+function setJamStage(J, i) {
+  J.stage = (i + JAM_STAGES.length) % JAM_STAGES.length;
+  G.bossIdx = J.stage > 0 ? J.stage - 1 : 0;                  // so speech blips match the boss
+  G.bubbles.boss = null; G.boss = newAnim();
+}
+function updateJam(dt) {
+  const J = G.J; if (!J) return;
+  const now = sound.now;
+  jamScheduler(J, now);
+  while (J.events.length && J.events[0].t <= now) { const e = J.events.shift(); G.hero[e.drum] = Math.max(G.hero[e.drum], 0.8); G.pad[e.drum] = Math.max(G.pad[e.drum], 0.6); }
+  if (J.rec && jamStepF(J, now) >= J.rec.to) { J.rec = null; floatText('LOOP SAVED!', 640, 300, '#69db7c', 44); }
+  J.hype = Math.max(0, J.hype - dt * 0.12);
+  if (J.hype > 0.85 && Math.random() < dt * 10) confetti(1);
+  // the boss grooves along: mirror the player's hits a beat-ish later for fun
+  const boss = jamBoss(J);
+  if (boss) for (const d of DRUMS) G.boss[d] = Math.max(G.boss[d], G.hero[d] * 0.5);
+}
+function drawJamGrid(J, now) {
+  const x = 350, y = 92, w = 590, rh = 18, cw = w / JAM_STEPS;
+  panel(x - 40, y - 12, w + 60, rh * 4 + 24);
+  DRUMS.forEach((d, r) => T(LETTER[d], x - 20, y + r * rh + rh / 2, 16, COL[d], { align: 'center', base: 'middle', lw: 3 }));
+  for (let i = 0; i <= JAM_STEPS; i++) {
+    ctx.fillStyle = i % 16 === 0 ? 'rgba(255,255,255,0.6)' : i % 4 === 0 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)';
+    ctx.fillRect(x + i * cw - 1, y, i % 4 === 0 ? 2 : 1, rh * 4);
+  }
+  for (const n of J.loop) {
+    const r = DRUMS.indexOf(n.drum);
+    rr(x + n.pos * cw + 2, y + r * rh + 2, cw - 4, rh - 4, 4); ctx.fillStyle = COL[n.drum]; ctx.fill();
+  }
+  const f = jamStepF(J, now), ph = ((f % JAM_STEPS) + JAM_STEPS) % JAM_STEPS;
+  ctx.fillStyle = J.rec && f >= J.rec.from ? '#ff4d6d' : '#7CFC00';
+  ctx.fillRect(x + ph * cw - 2, y - 6, 4, rh * 4 + 12);
+}
+function drawJam() {
+  const J = G.J, now = sound.now, beats = jamStepF(J, now) / 4, boss = jamBoss(J);
+  A.drawBg(ctx, JAM_STAGES[J.stage], G.t, beats);
+  if (boss) drawBossChar(boss.key, beats);
+  else BOSSES.forEach((b, i) => {
+    const x = 760 + i * 130, a = newAnim();
+    for (const d of DRUMS) a[d] = G.hero[d] * 0.6;
+    A.drawBoss(ctx, b.key, x, 590 - Math.abs(Math.sin(beats * Math.PI + i)) * 10 * J.hype, a, G.t + i, beats + i * 0.25, bossScale(b.key) * 0.32);
+  });
+  drawHeroChar(beats); drawBurstsHero();
+  drawJamGrid(J, now);
+  T('JAM MODE', 640, 225, 64, '#ffd43b', { align: 'center', base: 'middle', lw: 10 });
+  const f = jamStepF(J, now);
+  let status = `${J.bpm} BPM  ·  GROOVE ${J.groove ? 'ON' : 'OFF'}  ·  ${JAM_STAGES[J.stage].toUpperCase()}`;
+  T(status, 640, 280, 28, '#fff', { align: 'center', base: 'middle', lw: 6 });
+  if (J.rec) {
+    const live = f >= J.rec.from;
+    const msg = live ? `● REC  bar ${Math.min(2, Math.floor((f - J.rec.from) / 16) + 1)}/2` : `REC starts in ${Math.max(1, Math.ceil((J.rec.from - f) / 4))}...`;
+    if (!live || Math.sin(G.t * 10) > -0.3) T(msg, 640, 325, 34, '#ff4d6d', { align: 'center', base: 'middle', lw: 7 });
+  } else {
+    T(J.loop.length ? `LOOP: ${J.loop.length} hits  —  play over it!` : 'Press R to record a 2-bar loop', 640, 325, 26, '#69db7c', { align: 'center', base: 'middle', lw: 6 });
+  }
+  const help = ['←/→  stage      ↑/↓  tempo      B  groove', 'R  record loop (again = overdub)      C  clear loop      ESC  exit'];
+  help.forEach((h, i) => T(h, 640, 380 + i * 30, 20, '#ffd9a0', { align: 'center', base: 'middle', lw: 4 }));
+  // hype meter
+  panel(490, 460, 300, 30, 'rgba(22,12,44,0.88)', 12);
+  rr(496, 466, 288 * J.hype, 18, 8); ctx.fillStyle = J.hype > 0.85 ? '#ff4d6d' : '#ffd43b'; if (J.hype > 0.01) ctx.fill();
+  T(`HYPE  ·  ${J.hits} hits`, 640, 510, 20, '#fff', { align: 'center', base: 'middle', lw: 4 });
+  drawPads(null);
+  drawBubbles();
+  drawFx();
+}
+
 // ───────────────────────── main loop ─────────────────────────
 function update(dt) {
   decay(G.hero, dt); decay(G.boss, dt);
@@ -733,6 +869,7 @@ function update(dt) {
   G.hero.talk = bubbleTyping(G.bubbles.hero) ? 1 : 0;
   updateBubbles(); updateFx(dt);
   if (G.scene === 'battle') { updateProjectiles(G.B); updateBattle(dt); }
+  if (G.scene === 'jam') updateJam(dt);
   if (G.scene === 'victory' || G.scene === 'defeat') { updateProjectiles(null); }
   if (G.scene === 'champion' && Math.random() < dt * 14) confetti(1);
   if (G.scene === 'victory' && Math.random() < dt * 8) confetti(1);
@@ -750,6 +887,7 @@ function draw() {
     case 'victory': drawResult(true); break;
     case 'defeat': drawResult(false); break;
     case 'champion': drawChampion(); break;
+    case 'jam': drawJam(); break;
     default: break;
   }
   ctx.restore();
