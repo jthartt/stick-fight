@@ -3,8 +3,8 @@
 export const BOSSES = [
   {
     key: 'raccoon', name: 'ROCCO', title: 'THE GRUMPY RACCOON', stage: 'alley',
-    bpm: 88, steps: 8, drums: ['kick', 'snare'], minN: 3, maxN: 5, syncop: 0.5,
-    hp: 120, dmg: 5.5, missDmg: 3, pitch: 1.15, root: 55, bassline: [0, 0, 7, 5], blip: 190,
+    bpm: 76, steps: 8, drums: ['kick', 'snare'], minN: 2, maxN: 4, syncop: 0.2,
+    hp: 90, dmg: 6.5, missDmg: 2, pitch: 1.15, root: 55, bassline: [0, 0, 7, 5], blip: 190,
     lines: {
       intro: ["This is MY alley, kid. Beat it. Or... beat THIS."],
       call: ['Copy THIS, garbage boy!', 'Try and keep up.', 'Listen and weep.'],
@@ -17,8 +17,8 @@ export const BOSSES = [
   },
   {
     key: 'octopus', name: 'OCTAVIA', title: 'THE DISCO OCTOPUS', stage: 'disco',
-    bpm: 104, steps: 8, drums: ['kick', 'snare', 'hihat'], minN: 4, maxN: 7, syncop: 0.5,
-    hp: 140, dmg: 4.2, missDmg: 4, pitch: 1.0, root: 49, bassline: [0, 12, 0, 10, 0, 12, 7, 5], blip: 420,
+    bpm: 90, steps: 8, drums: ['kick', 'snare', 'hihat'], minN: 3, maxN: 5, syncop: 0.35,
+    hp: 110, dmg: 5, missDmg: 3, pitch: 1.0, root: 49, bassline: [0, 12, 0, 10, 0, 12, 7, 5], blip: 420,
     lines: {
       intro: ["Eight arms, darling. You've got two. Do the math!"],
       call: ['Feel the groove, sugar!', 'Shake it like THIS!', 'Disco never dies!'],

@@ -14,7 +14,7 @@ const LETTER = { hihat: 'D', kick: 'F', snare: 'J', tom: 'K' };
 const DNAME = { hihat: 'HI-HAT', kick: 'KICK', snare: 'SNARE', tom: 'TOM' };
 const COL = { hihat: '#38d9ff', kick: '#ff4d6d', snare: '#ffd43b', tom: '#69db7c' };
 const OUT = '#1d1433';
-const PERFECT = 0.075, GOOD = 0.16;
+const PERFECT = 0.09, GOOD = 0.22;
 const HERO_HP = 100;
 const TRACK = { x: 330, y: 96, w: 620, h: 72 };
 const FONT = 'Bangers, Impact, "Arial Black", sans-serif';
