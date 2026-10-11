@@ -578,7 +578,7 @@ function drawIntro() {
   drawPads(cfg);
 }
 
-function drawHpBar(x, y, w, h, frac, color, label, rightAlign) {
+function drawHpBar(x, y, w, h, frac, color, label, rightAlign, num) {
   rr(x, y, w, h, 10); ctx.fillStyle = 'rgba(20,10,40,0.85)'; ctx.fill();
   const fw = Math.max(0, (w - 6) * clamp(frac, 0, 1));
   if (fw > 0) {
@@ -586,6 +586,7 @@ function drawHpBar(x, y, w, h, frac, color, label, rightAlign) {
   }
   rr(x, y, w, h, 10); ctx.lineWidth = 5; ctx.strokeStyle = OUT; ctx.stroke();
   T(label, rightAlign ? x + w - 10 : x + 10, y + h / 2 + 1, 20, '#fff', { align: rightAlign ? 'right' : 'left', base: 'middle', lw: 5 });
+  if (num) T(num, rightAlign ? x + 10 : x + w - 10, y + h / 2 + 1, 22, '#fff', { align: rightAlign ? 'left' : 'right', base: 'middle', lw: 5 });
 }
 
 function drawTrack(B, vt, ph) {
@@ -646,8 +647,8 @@ function drawTrack(B, vt, ph) {
 
 function drawBattleHud(B, vt, ph) {
   const cfg = B.cfg;
-  drawHpBar(24, 20, 290, 30, B.heroHPd / HERO_HP, '#69db7c', 'YOU', false);
-  drawHpBar(966, 20, 290, 30, B.bossHPd / cfg.hp, '#ff4d6d', cfg.name, true);
+  drawHpBar(24, 20, 290, 30, B.heroHPd / HERO_HP, '#69db7c', 'YOU', false, `${Math.ceil(B.heroHP)} / ${HERO_HP}`);
+  drawHpBar(966, 20, 290, 30, B.bossHPd / cfg.hp, '#ff4d6d', cfg.name, true, `${Math.ceil(B.bossHP)} / ${cfg.hp}`);
   T(String(B.score).padStart(6, '0'), 640, 40, 42, '#ffd43b', { align: 'center', base: 'middle', lw: 8 });
   if (B.combo > 1) T(`COMBO x${B.combo}`, 28, 84, 32 + Math.min(14, B.combo), '#ffd43b', { align: 'left', base: 'middle', lw: 7 });
   drawTrack(B, vt, ph);
