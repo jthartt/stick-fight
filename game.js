@@ -8,9 +8,9 @@ const W = 1280, H = 720;
 const HERO = { x: 250, y: 600 };
 const BOSS = { x: 1030, y: 600 };
 const HERO_HEAD = [350, 345];
-const DRUMS = ['hihat', 'kick', 'snare', 'tom'];            // pad order D F J K
-const KEYS = { d: 'hihat', f: 'kick', j: 'snare', k: 'tom' };
-const LETTER = { hihat: 'D', kick: 'F', snare: 'J', tom: 'K' };
+const DRUMS = ['hihat', 'kick', 'snare', 'tom'];            // pad order 1 2 3 4
+const KEYS = { 1: 'hihat', 2: 'kick', 3: 'snare', 4: 'tom' };
+const LETTER = { hihat: '1', kick: '2', snare: '3', tom: '4' };
 const DNAME = { hihat: 'HI-HAT', kick: 'KICK', snare: 'SNARE', tom: 'TOM' };
 const COL = { hihat: '#38d9ff', kick: '#ff4d6d', snare: '#ffd43b', tom: '#69db7c' };
 const OUT = '#1d1433';
@@ -535,7 +535,7 @@ function drawTitle() {
   ctx.restore();
   T('GARAGE KID vs. THE BOSS DRUMMERS', 640, 250, 40, '#fff', { align: 'center', base: 'middle', lw: 8 });
   T("Listen to the boss's beat — then play it back!", 640, 310, 34, '#38d9ff', { align: 'center', base: 'middle', lw: 7 });
-  T('D = hi-hat   F = kick   J = snare   K = tom', 640, 360, 28, '#fff', { align: 'center', base: 'middle', lw: 6 });
+  T('1 = hi-hat   2 = kick   3 = snare   4 = tom', 640, 360, 28, '#fff', { align: 'center', base: 'middle', lw: 6 });
   const pulse = 1 + Math.sin(G.t * 5) * 0.06;
   ctx.save(); ctx.translate(640, 440); ctx.scale(pulse, pulse);
   T('PRESS SPACE TO START', 0, 0, 56, '#ff4d6d', { align: 'center', base: 'middle', lw: 10 });
