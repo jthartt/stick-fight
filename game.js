@@ -331,7 +331,7 @@ function hitNote(B, r, n, grade, drum) {
   const x = trackX(B, n.step);
   floatText(grade === 'perfect' ? 'PERFECT!' : 'NICE!', x, TRACK.y + 70, grade === 'perfect' ? '#ffd43b' : '#69db7c', 34);
   const [sx, sy] = A.kitPoint(HERO.x, HERO.y, 1, 1, drum);
-  fireProjectile(sx, sy, COL[drum], B.cfg.dmg * (grade === 'perfect' ? 1 : 0.6), false);
+  fireProjectile(sx, sy, COL[drum], B.cfg.dmg * (grade === 'perfect' ? 1 : 0.6), false, drum);
   checkRound(B, r);
 }
 
@@ -359,16 +359,16 @@ function checkRound(B, r) {
   if (B.state === 'play' && r.notes.every((n) => n.state === 'perfect' || n.state === 'good')) {
     floatText('FULL COMBO!', TRACK.x + TRACK.w / 2, TRACK.y + 40, '#ff922b', 58, 1.4, -40);
     const [sx, sy] = A.kitPoint(HERO.x, HERO.y, 1, 1, 'tom');
-    fireProjectile(sx, sy, '#ffd43b', B.cfg.dmg * 2, true);
+    fireProjectile(sx, sy, '#ffd43b', B.cfg.dmg * 2, true, 'tom');
     B.score += 150;
     if (Math.random() < 0.5 && !G.bubbles.boss) say('boss', pick(B.cfg.lines.hurt));
     if (Math.random() < 0.35 && !G.bubbles.hero) say('hero', pick(['Nailed it!', 'Cardboard power!', "That's how it's done!", 'Yeah! Again!']));
   }
 }
 
-function fireProjectile(x, y, color, dmg, big) {
+function fireProjectile(x, y, color, dmg, big, drum) {
   const [tx, ty] = bossHead(cfgNow().key);
-  G.projectiles.push({ x0: x, y0: y, x1: tx, y1: ty, t0: G.t, dur: big ? 0.6 : 0.45, color, dmg, big });
+  G.projectiles.push({ x0: x, y0: y, x1: tx, y1: ty, t0: G.t, dur: big ? 0.6 : 0.45, color, dmg, big, drum });
 }
 
 function updateProjectiles(B) {
@@ -382,7 +382,7 @@ function updateProjectiles(B) {
         spark(p.x1, p.y1, p.color, p.big ? 24 : 12, 320);
         floatText(String(Math.round(p.dmg * 10) / 10), p.x1 + rnd(-30, 30), p.y1 - 30, p.color, p.big ? 56 : 38, 0.9, -80);
         sound.zap();
-        if (B.bossHP <= 0) winBattle(B);
+        if (B.bossHP <= 0) winBattle(B, p.drum || 'kick');
       }
     } else if (Math.random() < 0.6) {
       const e = p.x0 + (p.x1 - p.x0) * k, f = p.y0 + (p.y1 - p.y0) * k - Math.sin(k * Math.PI) * 140;
@@ -401,13 +401,116 @@ function drawProjectiles() {
   }
 }
 
-function winBattle(B) {
-  B.state = 'won'; B.endAt = G.t + 3;
+function winBattle(B, drum) {
+  B.state = 'won'; B.endAt = G.t + FIN.fly + FIN.flyDur + 1.9;
   stopFutureNotes(B);
-  sound.cheer();
-  G.bubbles.boss = null; say('boss', pick(B.cfg.lines.defeat));
-  confetti(120);
-  setTimeout(() => { if (G.B === B && G.scene === 'battle' && !G.bubbles.hero) say('hero', pick(['Told you I could drum!', 'Garage rock FOREVER!'])); }, 800);
+  G.bubbles.boss = null; G.projectiles = [];
+  B.fin = { t0: G.t, drum, launched: false, heroSaid: false };
+  // the killing blow: one enormous, slowed-down drum hit
+  const now = sound.now;
+  sound.drum(drum, now, { pitch: 0.55, vol: 1.6, dull: true });
+  sound.drum('kick', now, { pitch: 0.45, vol: 1.5 });
+  const [dx, dy] = A.kitPoint(HERO.x, HERO.y, 1, 1, drum);
+  spark(dx, dy, COL[drum], 40, 420);
+}
+
+// ───────────────────────── finishing blow: close-up → whip pan → boss launched into orbit ─────────────────────────
+const FIN = { close: 1.25, fly: 1.6, flyDur: 1.5 };
+const FIN_WORD = { kick: 'KA-BOOOM!', snare: 'KRAKA-THOOM!', hihat: 'TSSSH-WHAM!', tom: 'BONG-ZILLA!' };
+const STAR = [1190, 80];                         // where the boss vanishes with a twinkle
+const flerp = (a, b, t) => a + (b - a) * t;
+const easeIO = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const finU = (B) => (B && B.fin ? G.t - B.fin.t0 : -1);
+function finCam(B) {
+  const u = finU(B), [dx, dy] = A.kitPoint(HERO.x, HERO.y, 1, 1, B.fin.drum);
+  const base = { x: W / 2, y: H / 2, z: 1 };
+  const close = { x: dx, y: dy - 10, z: 2.9 + Math.min(1, u / FIN.close) * 0.35 };
+  const boss = { x: BOSS.x - 40, y: BOSS.y - 230, z: 1.8 };
+  const mix = (a, b, t) => ({ x: flerp(a.x, b.x, t), y: flerp(a.y, b.y, t), z: flerp(a.z, b.z, t) });
+  if (u < 0.15) return mix(base, close, easeIO(u / 0.15));
+  if (u < FIN.close) return close;
+  if (u < FIN.fly) return mix(close, boss, easeIO((u - FIN.close) / (FIN.fly - FIN.close)));
+  return mix(boss, base, easeIO((u - FIN.fly) / 0.45));
+}
+function bossFlight(B) {
+  const u = finU(B) - FIN.fly;
+  if (u < 0) return null;
+  const k = Math.min(1, u / FIN.flyDur), e = 1 - (1 - k) * (1 - k);
+  return {
+    x: flerp(BOSS.x, STAR[0], e) + Math.sin(k * Math.PI) * 120,
+    y: flerp(BOSS.y - 200, STAR[1], e) - Math.sin(k * Math.PI) * 180,
+    rot: u * 15, s: flerp(1, 0.03, e), gone: k >= 1,
+  };
+}
+function updateFinisher(B) {
+  const u = finU(B), f = B.fin;
+  if (u < FIN.close) { G.hero[f.drum] = 1; G.shake = Math.max(G.shake, u < 0.35 ? 18 : 3); }
+  if (!f.launched && u >= FIN.fly) {
+    f.launched = true;
+    const now = sound.now;
+    sound.drum('kick', now, { pitch: 0.5, vol: 1.6 }); sound.drum('snare', now, { pitch: 0.7, vol: 1.2 });
+    sound.zap(); sound.cheer();
+    G.shake = 26; G.boss.hurt = 1;
+    spark(BOSS.x - 40, BOSS.y - 230, '#ffd43b', 50, 650);
+    confetti(140);
+    floatText('WAAAAAH!', BOSS.x - 80, BOSS.y - 400, '#fff', 60, 1.3, -30);
+  }
+  const fl = bossFlight(B);
+  if (fl && fl.gone && !B.flown) {
+    B.flown = true;
+    sound.blip(1760); setTimeout(() => sound.blip(2349), 90);
+    spark(STAR[0], STAR[1], '#fff', 18, 220);
+  }
+  if (!f.heroSaid && u >= FIN.fly + 1.9) {
+    f.heroSaid = true;
+    say('hero', pick(['Told you I could drum!', 'Garage rock FOREVER!', 'And STAY out of my groove!', 'Encore? No? Okay.']));
+  }
+}
+function drawFinisherOverlay(B) {
+  const u = finU(B), f = B.fin;
+  // speed lines during the close-up
+  if (u < FIN.close) {
+    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    let seed = Math.floor(G.t * 30);
+    const r = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    for (let i = 0; i < 46; i++) {
+      const a = r() * Math.PI * 2, r0 = 250 + r() * 120;
+      ctx.lineWidth = 2 + r() * 6;
+      ctx.beginPath(); ctx.moveTo(640 + Math.cos(a) * r0, 360 + Math.sin(a) * r0); ctx.lineTo(640 + Math.cos(a) * 950, 360 + Math.sin(a) * 950); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // cinematic letterbox
+  const lb = 78 * easeIO(u / 0.2) * (1 - easeIO((u - FIN.fly - FIN.flyDur - 0.6) / 0.5));
+  if (lb > 0.5) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, lb); ctx.fillRect(0, H - lb, W, lb); }
+  // the big onomatopoeia
+  if (u > 0.04 && u < FIN.close) {
+    const k = (u - 0.04) / (FIN.close - 0.04), pop = 1 + Math.max(0, 0.35 - k) * 2.5;
+    ctx.save(); ctx.translate(640, 380); ctx.rotate(-0.09 + Math.sin(G.t * 20) * 0.015); ctx.scale(pop, pop);
+    T(FIN_WORD[f.drum], 0, 0, 150, COL[f.drum], { align: 'center', base: 'middle', lw: 18 });
+    ctx.restore();
+    T('FINAL HIT!', 640, 140, 54, '#fff', { align: 'center', base: 'middle', lw: 10 });
+  }
+  const v = u - FIN.fly;
+  if (v > 0 && v < 1.5) {
+    const p = 1 + Math.sin(G.t * 14) * 0.06;
+    ctx.save(); ctx.translate(640, 220); ctx.scale(p, p);
+    T('SEE YA!', 0, 0, 120, '#ffd43b', { align: 'center', base: 'middle', lw: 14 });
+    ctx.restore();
+  }
+  // twinkle where the boss vanished
+  const tw = v - FIN.flyDur;
+  if (tw > 0 && tw < 0.9) {
+    const sz = 26 * Math.sin((tw / 0.9) * Math.PI);
+    ctx.save(); ctx.translate(STAR[0], STAR[1]); ctx.rotate(tw * 6);
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) { const rr2 = i % 2 ? sz * 0.25 : sz; const a = (i / 8) * Math.PI * 2; ctx.lineTo(Math.cos(a) * rr2, Math.sin(a) * rr2); }
+    ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.restore();
+  }
+  // flashes on the hit and on the launch
+  const fl = Math.max(u < 0.12 ? 1 - u / 0.12 : 0, v > 0 && v < 0.1 ? 1 - v / 0.1 : 0);
+  if (fl > 0) { ctx.fillStyle = `rgba(255,255,255,${0.85 * fl})`; ctx.fillRect(0, 0, W, H); }
 }
 function loseBattle(B) {
   B.state = 'lost'; B.endAt = G.t + 2.8;
@@ -692,16 +795,32 @@ function drawBattleHud(B, vt, ph) {
 
 function drawStage(cfg, beats) {
   A.drawBg(ctx, cfg.stage, G.t, beats);
-  drawHeroChar(beats); drawBossChar(cfg.key, beats); drawBurstsHero();
+  drawHeroChar(beats);
+  const B = G.B, fl = B && B.fin ? bossFlight(B) : null;
+  if (B && B.flown) { /* boss is in orbit */ }
+  else if (fl) {
+    ctx.save(); ctx.translate(fl.x, fl.y); ctx.rotate(fl.rot); ctx.scale(fl.s, fl.s); ctx.translate(-BOSS.x, -(BOSS.y - 200));
+    drawBossChar(cfg.key, beats);
+    ctx.restore();
+  } else drawBossChar(cfg.key, beats);
+  drawBurstsHero();
 }
 
 function drawBattle() {
   const B = G.B, cfg = B.cfg, now = sound.now, vt = now - sound.latency();
   const beats = (vt - B.start) / B.beat;
   const ph = phase(B, vt);
+  ctx.save();
+  if (B.fin) {
+    const c = finCam(B), z = c.z;
+    const cx = clamp(c.x, W / (2 * z), W - W / (2 * z)), cy = clamp(c.y, H / (2 * z), H - H / (2 * z));
+    ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-cx, -cy);
+  }
   drawStage(cfg, beats);
   drawProjectiles();
   drawFx();
+  ctx.restore();
+  if (B.fin) { drawFinisherOverlay(B); drawBubbles(); return; }
   drawBubbles();
   drawBattleHud(B, vt, ph);
   drawPads(cfg);
@@ -890,7 +1009,7 @@ function update(dt) {
   G.boss.talk = bubbleTyping(G.bubbles.boss) ? 1 : 0;
   G.hero.talk = bubbleTyping(G.bubbles.hero) ? 1 : 0;
   updateBubbles(); updateFx(dt);
-  if (G.scene === 'battle') { updateProjectiles(G.B); updateBattle(dt); }
+  if (G.scene === 'battle') { updateProjectiles(G.B); updateBattle(dt); if (G.B && G.B.fin) updateFinisher(G.B); }
   if (G.scene === 'jam') updateJam(dt);
   if (G.scene === 'victory' || G.scene === 'defeat') { updateProjectiles(null); }
   if (G.scene === 'champion' && Math.random() < dt * 14) confetti(1);
