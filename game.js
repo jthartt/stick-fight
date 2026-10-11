@@ -207,8 +207,10 @@ function drawPads(dimFor) {
 function newBattle() {
   const cfg = cfgNow();
   const beat = 60 / cfg.bpm;
+  // breather between LISTEN and YOUR TURN: ≥1 s, rounded up to whole beats so the groove stays on the grid
+  const gapBeats = Math.max(2, Math.ceil(1 / beat));
   return {
-    cfg, beat, bar: beat * 4, start: sound.now + 0.6, rounds: [], nextBeat: 0,
+    cfg, beat, bar: beat * 4, gapBeats, gap: gapBeats * beat, cycle: beat * (8 + gapBeats), start: sound.now + 0.6, rounds: [], nextBeat: 0,
     bossHP: cfg.hp, heroHP: HERO_HP, bossHPd: cfg.hp, heroHPd: HERO_HP,
     state: 'play', endAt: 0, score: 0, combo: 0, maxCombo: 0,
     perfect: 0, good: 0, judged: 0, tauntAt: 0, waitAt: 0, tip: 0,
@@ -258,11 +260,11 @@ function genPattern(B) {
 
 function createRound(B) {
   const k = B.rounds.length, cfg = B.cfg;
-  const callT = B.start + (1 + 2 * k) * B.bar;
-  const round = { k, callT, respT: callT + B.bar, notes: genPattern(B), resolved: false, callLine: Math.random() < 0.3, lineDone: false };
+  const callT = B.start + B.bar + k * B.cycle;
+  const round = { k, callT, respT: callT + B.bar + B.gap, notes: genPattern(B), resolved: false, callLine: Math.random() < 0.3, lineDone: false };
   for (const n of round.notes) {
     n.tCall = callT + (n.step / cfg.steps) * B.bar;
-    n.tResp = n.tCall + B.bar;
+    n.tResp = n.tCall + B.bar + B.gap;
     n.state = 'pending'; n.fired = false; n.judgedAt = 0;
     n.nodes = sound.drum(n.drum, n.tCall, { pitch: cfg.pitch }) || [];
   }
@@ -281,8 +283,8 @@ function scheduler(B, now) {
   while (B.start + B.nextBeat * B.beat < now + 0.2) {
     const i = B.nextBeat++, t = B.start + i * B.beat;
     if (t < now - 0.01) continue;
-    const bi = Math.floor(i / 4), accent = i % 4 === 0;
-    const loud = bi === 0 || (bi >= 2 && bi % 2 === 0);
+    const ph = phase(B, t + 0.001), accent = ph.name === 'count' ? ph.beat === 0 : ph.downbeat;
+    const loud = ph.name !== 'listen';
     sound.click(t, accent, loud ? 0.55 : 0.28);
     if (cfg.bassline) sound.bass(t, cfg.bassline[i % cfg.bassline.length], cfg.root, B.beat * 0.8);
   }
@@ -292,10 +294,12 @@ function scheduler(B, now) {
 function phase(B, vt) {
   const x = vt - B.start;
   if (x < 0) return { name: 'pre' };
-  const bi = Math.floor(x / B.bar);
-  if (bi === 0) return { name: 'count', beat: Math.floor(x / B.beat) };
-  const k = Math.floor((bi - 1) / 2);
-  return { name: bi % 2 === 1 ? 'listen' : 'resp', k, bi };
+  if (x < B.bar) return { name: 'count', beat: Math.floor(x / B.beat) };
+  const y = x - B.bar, k = Math.floor(y / B.cycle), r = y - k * B.cycle;
+  const beatIn = Math.floor(r / B.beat + 1e-6);
+  if (r < B.bar) return { name: 'listen', k, downbeat: beatIn === 0 };
+  if (r < B.bar + B.gap) return { name: 'ready', k, left: B.gapBeats - (beatIn - 4), downbeat: false };
+  return { name: 'resp', k, downbeat: beatIn - 4 - B.gapBeats === 0 };
 }
 const trackX = (B, step) => TRACK.x + 40 + (step / B.cfg.steps) * (TRACK.w - 80);
 
@@ -416,7 +420,7 @@ function updateBattle(dt) {
   const B = G.B; if (!B) return;
   const now = sound.now, vt = now - sound.latency();
   if (B.state === 'play') {
-    while (now >= B.start + (1 + 2 * B.rounds.length) * B.bar - 0.3) createRound(B);
+    while (now >= B.start + B.bar + B.rounds.length * B.cycle - 0.3) createRound(B);
     scheduler(B, now);
     for (const r of B.rounds.slice(-2)) {
       if (r.callLine && !r.lineDone && vt >= r.callT) {
@@ -596,7 +600,7 @@ function drawTrack(B, vt, ph) {
     ctx.beginPath(); ctx.moveTo(x, TRACK.y + (isBeat ? 8 : 18)); ctx.lineTo(x, TRACK.y + TRACK.h - (isBeat ? 8 : 18)); ctx.stroke();
     if (isBeat) T(String(s / (cfg.steps / 4) + 1), x, TRACK.y + 11, 14, 'rgba(255,255,255,0.6)', { align: 'center', base: 'middle', lw: 3 });
   }
-  const round = (ph.name === 'listen' || ph.name === 'resp') ? B.rounds[ph.k] : null;
+  const round = (ph.name === 'listen' || ph.name === 'ready' || ph.name === 'resp') ? B.rounds[ph.k] : null;
   if (!round) {
     if (ph.name === 'count' || ph.name === 'pre') T('...', TRACK.x + TRACK.w / 2, cy, 36, 'rgba(255,255,255,0.5)', { align: 'center', base: 'middle', lw: 4 });
     return;
@@ -655,6 +659,10 @@ function drawBattleHud(B, vt, ph) {
       ctx.save(); ctx.translate(cx, 208); ctx.scale(p, p);
       T('YOUR TURN!', 0, 0, 48, '#69db7c', { align: 'center', base: 'middle', lw: 9 });
       ctx.restore();
+    } else if (ph.name === 'ready') {
+      T('GET READY...', cx, 208, 46, '#ffd43b', { align: 'center', base: 'middle', lw: 9 });
+      const k = (vt - B.start) / B.beat, fr = k - Math.floor(k);
+      T(String(ph.left), 640, 340, 160 * (1 + (1 - fr) * 0.25), '#69db7c', { align: 'center', base: 'middle', lw: 14 });
     } else if (ph.name === 'count' || ph.name === 'pre') {
       T('GET READY!', cx, 208, 46, '#fff', { align: 'center', base: 'middle', lw: 9 });
       if (ph.name === 'count') {
