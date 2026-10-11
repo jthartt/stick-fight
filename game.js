@@ -405,7 +405,8 @@ function winBattle(B, drum) {
   B.state = 'won'; B.endAt = G.t + FIN.fly + FIN.flyDur + 1.9;
   stopFutureNotes(B);
   G.bubbles.boss = null; G.projectiles = [];
-  B.fin = { t0: G.t, drum, launched: false, heroSaid: false };
+  B.fin = { t0: G.t, drum, launched: false, heroSaid: false, mode: B.cfg.key === 'volcano' ? 'crumble' : 'fly' };
+  if (B.fin.mode === 'crumble') B.endAt += 1.5;   // linger on the rubble
   // the killing blow: one enormous, slowed-down drum hit
   const now = sound.now;
   sound.drum(drum, now, { pitch: 0.55, vol: 1.6, dull: true });
@@ -434,7 +435,7 @@ function finCam(B) {
 }
 function bossFlight(B) {
   const u = finU(B) - FIN.fly;
-  if (u < 0) return null;
+  if (u < 0 || B.fin.mode === 'crumble') return null;
   const k = Math.min(1, u / FIN.flyDur), e = 1 - (1 - k) * (1 - k);
   return {
     x: flerp(BOSS.x, STAR[0], e) + Math.sin(k * Math.PI) * 120,
@@ -445,6 +446,7 @@ function bossFlight(B) {
 function updateFinisher(B) {
   const u = finU(B), f = B.fin;
   if (u < FIN.close) { G.hero[f.drum] = 1; G.shake = Math.max(G.shake, u < 0.35 ? 18 : 3); }
+  if (f.mode === 'crumble') { updateCrumble(B, u - FIN.fly); return; }
   if (!f.launched && u >= FIN.fly) {
     f.launched = true;
     const now = sound.now;
@@ -464,6 +466,78 @@ function updateFinisher(B) {
   if (!f.heroSaid && u >= FIN.fly + 1.9) {
     f.heroSaid = true;
     say('hero', pick(['Told you I could drum!', 'Garage rock FOREVER!', 'And STAY out of my groove!', 'Encore? No? Okay.']));
+  }
+}
+// final boss: the volcano shudders, cracks and collapses into a pile of rocks
+const ROCK_COLS = ['#5a3d35', '#4a302a', '#6b4a40', '#3d2a25', '#ff6b35'];
+const pileY = (x) => BOSS.y - Math.max(0, 95 - Math.abs(x - BOSS.x) * 0.5);
+function updateCrumble(B, v) {
+  const f = B.fin, dt = 1 / 60;
+  if (v < 0) return;
+  if (!f.rumble) {
+    f.rumble = true;
+    const now = sound.now;
+    for (let i = 0; i < 6; i++) sound.drum('kick', now + i * 0.09, { pitch: 0.4 + i * 0.03, vol: 1.2 });
+    floatText('RUMBLE RUMBLE...', BOSS.x - 60, BOSS.y - 420, '#ffd166', 48, 1.0, -20);
+  }
+  if (v < 0.7) { G.boss.hurt = 1; G.shake = Math.max(G.shake, 6 + v * 20); return; }
+  if (!B.rocks) {
+    B.rocks = []; B.flown = true;                       // body is gone; the rocks take over
+    const now = sound.now;
+    sound.drum('tom', now, { pitch: 0.35, vol: 1.6 }); sound.drum('snare', now, { pitch: 0.5, vol: 1.3 });
+    for (let i = 0; i < 8; i++) sound.drum('snare', now + 0.05 + i * 0.07, { pitch: 0.4 + Math.random() * 0.3, vol: 0.6 });
+    sound.cheer(); G.shake = 26; confetti(140);
+    for (let i = 0; i < 70; i++) {
+      const y = BOSS.y - 40 - Math.random() * 360, x = BOSS.x + (Math.random() - 0.5) * (300 - (BOSS.y - y) * 0.45);
+      B.rocks.push({ x, y, vx: (x - BOSS.x) * rnd(1.5, 4) + rnd(-80, 80), vy: rnd(-420, -60), r: rnd(10, 30),
+        rot: rnd(0, 6), vr: rnd(-8, 8), col: ROCK_COLS[Math.random() < 0.12 ? 4 : Math.floor(Math.random() * 4)],
+        sides: 5 + Math.floor(Math.random() * 3), rest: false });
+    }
+    spark(BOSS.x, BOSS.y - 250, '#ff6b35', 40, 500);
+  }
+  for (const r of B.rocks) {
+    if (r.rest) continue;
+    r.vy += 1500 * dt; r.x += r.vx * dt; r.y += r.vy * dt; r.rot += r.vr * dt;
+    const floor = pileY(r.x) - r.r * 0.6;
+    if (r.y > floor) {
+      r.y = floor; r.vy *= -0.3; r.vx *= 0.55; r.vr *= 0.5;
+      if (Math.abs(r.vy) < 90) { r.rest = true; r.vy = 0; }
+    }
+  }
+  if (!f.sad && v > 2.0) { f.sad = true; say('boss', B.cfg.lines.defeat[0]); }
+}
+function drawRocks(B) {
+  if (!B.rocks) return;
+  const settled = B.rocks.filter((r) => r.rest).length / B.rocks.length;
+  // the pile itself fills in as rocks settle
+  if (settled > 0.2) {
+    ctx.save(); ctx.globalAlpha = Math.min(1, settled * 1.3);
+    ctx.beginPath(); ctx.moveTo(BOSS.x - 200, BOSS.y);
+    for (let x = BOSS.x - 200; x <= BOSS.x + 200; x += 10) ctx.lineTo(x, pileY(x) + 8);
+    ctx.lineTo(BOSS.x + 200, BOSS.y); ctx.closePath();
+    ctx.fillStyle = '#4a302a'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = OUT; ctx.stroke();
+    ctx.restore();
+  }
+  for (const r of B.rocks) {
+    ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(r.rot);
+    ctx.beginPath();
+    for (let i = 0; i < r.sides; i++) { const a = (i / r.sides) * Math.PI * 2, k = r.r * (0.75 + ((i * 37) % 10) / 40); ctx.lineTo(Math.cos(a) * k, Math.sin(a) * k); }
+    ctx.closePath(); ctx.fillStyle = r.col; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = OUT; ctx.stroke();
+    ctx.restore();
+  }
+  // a sad little face on top of the pile, plus a last wisp of smoke
+  if (settled > 0.7) {
+    const fx = BOSS.x, fy = pileY(BOSS.x) + 30;
+    ctx.save(); ctx.globalAlpha = Math.min(1, (settled - 0.7) * 4);
+    ctx.fillStyle = OUT;
+    ctx.beginPath(); ctx.arc(fx - 16, fy, 5, 0, Math.PI * 2); ctx.arc(fx + 16, fy, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = OUT; ctx.beginPath(); ctx.arc(fx, fy + 20, 10, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+    for (let i = 0; i < 3; i++) {
+      const k = (G.t * 0.5 + i / 3) % 1;
+      ctx.globalAlpha = 0.5 * (1 - k); ctx.fillStyle = '#9a8f99';
+      ctx.beginPath(); ctx.arc(fx + Math.sin(G.t * 2 + i) * 10, fy - 60 - k * 120, 10 + k * 18, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
   }
 }
 function drawFinisherOverlay(B) {
@@ -495,12 +569,12 @@ function drawFinisherOverlay(B) {
   if (v > 0 && v < 1.5) {
     const p = 1 + Math.sin(G.t * 14) * 0.06;
     ctx.save(); ctx.translate(640, 220); ctx.scale(p, p);
-    T('SEE YA!', 0, 0, 120, '#ffd43b', { align: 'center', base: 'middle', lw: 14 });
+    T(f.mode === 'crumble' ? 'CRUMBLE!' : 'SEE YA!', 0, 0, 120, '#ffd43b', { align: 'center', base: 'middle', lw: 14 });
     ctx.restore();
   }
   // twinkle where the boss vanished
   const tw = v - FIN.flyDur;
-  if (tw > 0 && tw < 0.9) {
+  if (f.mode === 'fly' && tw > 0 && tw < 0.9) {
     const sz = 26 * Math.sin((tw / 0.9) * Math.PI);
     ctx.save(); ctx.translate(STAR[0], STAR[1]); ctx.rotate(tw * 6);
     ctx.beginPath();
@@ -797,7 +871,8 @@ function drawStage(cfg, beats) {
   A.drawBg(ctx, cfg.stage, G.t, beats);
   drawHeroChar(beats);
   const B = G.B, fl = B && B.fin ? bossFlight(B) : null;
-  if (B && B.flown) { /* boss is in orbit */ }
+  if (B && B.rocks) drawRocks(B);
+  if (B && B.flown) { /* boss is in orbit (or a pile of rocks) */ }
   else if (fl) {
     ctx.save(); ctx.translate(fl.x, fl.y); ctx.rotate(fl.rot); ctx.scale(fl.s, fl.s); ctx.translate(-BOSS.x, -(BOSS.y - 200));
     drawBossChar(cfg.key, beats);
