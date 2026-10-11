@@ -1,0 +1,60 @@
+// Boss ladder. steps = grid per bar (8 = eighths, 16 = sixteenths); minN/maxN = notes per pattern,
+// scaled by damage taken; dmg = boss damage per PERFECT hit (GOOD = 60%); missDmg = hero damage per miss.
+export const BOSSES = [
+  {
+    key: 'raccoon', name: 'ROCCO', title: 'THE GRUMPY RACCOON', stage: 'alley',
+    bpm: 88, steps: 8, drums: ['kick', 'snare'], minN: 3, maxN: 5, syncop: 0.5,
+    hp: 120, dmg: 5.5, missDmg: 3, pitch: 1.15, root: 55, bassline: [0, 0, 7, 5], blip: 190,
+    lines: {
+      intro: ["This is MY alley, kid. Beat it. Or... beat THIS."],
+      call: ['Copy THIS, garbage boy!', 'Try and keep up.', 'Listen and weep.'],
+      taunt: ["I've heard better beats from a dumpster lid!", 'You call that rhythm?', 'My trash can has more groove than you!', 'Pfft. Amateur hour.', 'Did a cat walk across your drums?'],
+      hurt: ['Hey! Watch the fur!', 'Ow! Lucky hit!', 'My tail! MY BEAUTIFUL TAIL!'],
+      wait: ['Wait your turn, kid!', "Hey! I'm playing here!"],
+      win: ['Back to the garage, kid. HA!'],
+      defeat: ["Fine... take the alley. I'm going back to my dumpster."],
+    },
+  },
+  {
+    key: 'octopus', name: 'OCTAVIA', title: 'THE DISCO OCTOPUS', stage: 'disco',
+    bpm: 104, steps: 8, drums: ['kick', 'snare', 'hihat'], minN: 4, maxN: 7, syncop: 0.5,
+    hp: 140, dmg: 4.2, missDmg: 4, pitch: 1.0, root: 49, bassline: [0, 12, 0, 10, 0, 12, 7, 5], blip: 420,
+    lines: {
+      intro: ["Eight arms, darling. You've got two. Do the math!"],
+      call: ['Feel the groove, sugar!', 'Shake it like THIS!', 'Disco never dies!'],
+      taunt: ['Was that a beat or a hiccup?', 'Groovy... NOT.', 'Two arms and you STILL miss?', 'Ink-credible. Ink-credibly BAD.', "Honey, that's not disco. That's a disaster."],
+      hurt: ['My sequins!', "Ooh, you've got some funk!", 'Ink-sulting!'],
+      wait: ['Shh! The octopus is performing!'],
+      win: ["Stayin' alive... unlike your career!"],
+      defeat: ['The disco... is... over... *sob*'],
+    },
+  },
+  {
+    key: 'robot', name: 'TIK-TOK 3000', title: 'THE ROBOT METRONOME', stage: 'lab',
+    bpm: 112, steps: 16, drums: ['kick', 'snare', 'hihat', 'tom'], minN: 5, maxN: 8, syncop: 0.35,
+    hp: 160, dmg: 3.4, missDmg: 5, pitch: 1.35, root: 41.2, bassline: [0, 0, 3, 0, 5, 0, 3, -2], blip: 640,
+    lines: {
+      intro: ['GREETINGS, HUMAN. I HAVE NEVER BEEN OFF-BEAT. NOT ONCE. EVER.'],
+      call: ['EXECUTING PATTERN.', 'COPY. PASTE. IF YOU CAN.', 'BEEP BOOP. OBSERVE.'],
+      taunt: ['ERROR: RHYTHM NOT FOUND.', 'CALCULATING YOUR TIMING... RESULT: LOL.', 'YOU ARE 0.2 SECONDS OF DISAPPOINTMENT.', 'BEEP. BOOP. OFF-BEAT DETECTED.', 'HAVE YOU TRIED TURNING YOURSELF OFF AND ON?'],
+      hurt: ['DAMAGE DETECTED.', 'SYSTEM... GROOVING... UNEXPECTEDLY.', 'WARNING: FUNK OVERLOAD.'],
+      wait: ['INPUT REJECTED. IT IS MY TURN.'],
+      win: ['HUMAN DEFEATED. TICK. TOCK.'],
+      defeat: ['TICK... TOCK... TICK......... tock.'],
+    },
+  },
+  {
+    key: 'volcano', name: 'MAESTRO KABOOM', title: 'THE VOLCANO OF RHYTHM', stage: 'volcano',
+    bpm: 120, steps: 16, drums: ['kick', 'snare', 'hihat', 'tom'], minN: 6, maxN: 9, syncop: 0.6,
+    hp: 180, dmg: 3, missDmg: 5, pitch: 0.75, root: 36.7, bassline: [0, 0, 1, 0, 0, 0, -2, -1], blip: 110,
+    lines: {
+      intro: ['I HAVE DRUMMED FOR TEN THOUSAND YEARS. KNEEL BEFORE THE ERUPTION!'],
+      call: ['FEEL THE MAGMA!', 'RUMBLE! RUMBLE!', 'BOW TO THE BEAT!'],
+      taunt: ['YOUR STICKS ARE KINDLING!', "PATHETIC! I'VE SNEEZED BETTER BEATS!", 'MOLTEN DISAPPOINTMENT!', 'IS THAT A DRUM KIT OR A RECYCLING BIN?', "I'LL USE YOUR KIT FOR S'MORES!"],
+      hurt: ["MY MAGMA! IT'S... COOLING!", 'IMPOSSIBLE! A MORTAL WITH GROOVE?!', 'THAT ONE... RUMBLED ME.'],
+      wait: ['SILENCE! THE MOUNTAIN SPEAKS!'],
+      win: ['BACK TO YOUR GARAGE, PEBBLE!'],
+      defeat: ['I... am... just... a... hill... now...'],
+    },
+  },
+];
