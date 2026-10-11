@@ -493,7 +493,9 @@ window.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   sound.init();
   const k = e.key.toLowerCase();
-  if (KEYS[k]) { e.preventDefault(); drumPress(KEYS[k]); return; }
+  const code = /^(Digit|Numpad)([1-4])$/.exec(e.code || '');   // layout/NumLock-proof
+  const drumKey = KEYS[k] || (code && KEYS[code[2]]);
+  if (drumKey) { e.preventDefault(); drumPress(drumKey); return; }
   if (k === ' ' || k === 'enter') { e.preventDefault(); advance(); return; }
   if (k === 'm') { sound.toggleMute(); return; }
   if (k === 'q' && G.scene === 'title') { toScene('jam'); return; }
@@ -507,7 +509,18 @@ window.addEventListener('keydown', (e) => {
   }
   if (k === 'escape') { if (G.scene !== 'title') toScene('title'); }
 });
-window.addEventListener('pointerdown', () => { sound.init(); advance(); });
+// on-screen pads are clickable/tappable; clicks elsewhere advance scenes
+function padAt(e) {
+  const r = canvas.getBoundingClientRect();
+  const x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+  return DRUMS.find((d, i) => Math.abs(x - (640 + (i - 1.5) * 130)) <= 58 && Math.abs(y - 628) <= 38);
+}
+window.addEventListener('pointerdown', (e) => {
+  sound.init();
+  const d = padAt(e);
+  if (d) { e.preventDefault(); drumPress(d); return; }
+  advance();
+});
 
 // ───────────────────────── scene drawing ─────────────────────────
 function decay(a, dt) {
