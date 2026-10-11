@@ -708,7 +708,7 @@ function drawChampion() {
     A.drawBoss(ctx, b.key, xs[i], 600 - bob, a, G.t + i, beats + i * 0.25, bossScale(b.key) * 0.6);
   });
   const ha = newAnim(); ha[DRUMS[Math.floor(G.t * 4) % 4]] = 1 - ((G.t * 4) % 1);
-  A.drawHero(ctx, 640, 600 - Math.abs(Math.sin(G.t * 4)) * 14, ha, G.t, beats, 1);
+  A.drawHero(ctx, 640, 600 - Math.abs(Math.sin(G.t * 4)) * 14, ha, G.t, beats, 0.8);
   ctx.save(); ctx.translate(640, 130); ctx.rotate(Math.sin(G.t * 2) * 0.04); const sc = 1 + Math.sin(G.t * 4) * 0.04; ctx.scale(sc, sc);
   T('GARAGE LEGEND!', 0, 0, 130, '#ffd43b', { align: 'center', base: 'middle', lw: 13 });
   ctx.restore();
