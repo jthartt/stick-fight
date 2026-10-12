@@ -29,7 +29,7 @@ const G = {
   t: 0, scene: 'title', bossIdx: 0, total: 0, sceneT: 0,
   hero: newAnim(), boss: newAnim(), pad: { hihat: 0, kick: 0, snare: 0, tom: 0 },
   shake: 0, particles: [], floats: [], projectiles: [], bubbles: { hero: null, boss: null },
-  B: null, J: null, last: null, champFanfare: false,
+  B: null, J: null, last: null, mapSel: 0, beaten: new Set(), champFanfare: false,
 };
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -611,7 +611,7 @@ function updateBattle(dt) {
     }
   } else if (G.t >= B.endAt) {
     if (B.state === 'won') {
-      G.total += B.score;
+      G.total += B.score; G.beaten.add(G.bossIdx);
       if (G.bossIdx >= BOSSES.length - 1) toScene('champion'); else toScene('victory');
     } else toScene('defeat');
   }
@@ -648,7 +648,8 @@ function startBattle() {
 }
 function advance() {
   switch (G.scene) {
-    case 'title': G.bossIdx = 0; G.total = 0; toScene('intro'); break;
+    case 'title': G.total = 0; toScene('map'); break;
+    case 'map': G.bossIdx = G.mapSel; toScene('intro'); break;
     case 'intro': startBattle(); break;
     case 'victory': G.bossIdx++; toScene('intro'); break;
     case 'defeat': startBattle(); break;
@@ -676,6 +677,10 @@ window.addEventListener('keydown', (e) => {
   if (k === ' ' || k === 'enter') { e.preventDefault(); advance(); return; }
   if (k === 'm') { sound.toggleMute(); return; }
   if (k === 'q' && G.scene === 'title') { toScene('jam'); return; }
+  if (G.scene === 'map') {
+    if (k === 'arrowleft' || k === 'arrowup') { e.preventDefault(); G.mapSel = (G.mapSel + BOSSES.length - 1) % BOSSES.length; sound.blip(520); return; }
+    if (k === 'arrowright' || k === 'arrowdown') { e.preventDefault(); G.mapSel = (G.mapSel + 1) % BOSSES.length; sound.blip(660); return; }
+  }
   if (G.scene === 'jam' && G.J) {
     const J = G.J;
     if (k === 'arrowleft' || k === 'arrowright') { e.preventDefault(); setJamStage(J, J.stage + (k === 'arrowright' ? 1 : -1)); return; }
@@ -694,8 +699,15 @@ function padAt(e) {
 }
 window.addEventListener('pointerdown', (e) => {
   sound.init();
-  const d = padAt(e);
+  const d = G.scene === 'map' ? null : padAt(e);
   if (d) { e.preventDefault(); drumPress(d); return; }
+  if (G.scene === 'map') {
+    const r = canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+    const i = MAP_NODES.findIndex(([nx, ny]) => Math.hypot(x - nx, y - ny + 60) < 95);
+    if (i < 0) return;
+    G.mapSel = i;
+  }
   advance();
 });
 
@@ -728,7 +740,7 @@ function drawTitle() {
   T('1 = hi-hat   2 = kick   3 = snare   4 = tom', 640, 360, 28, '#fff', { align: 'center', base: 'middle', lw: 6 });
   const pulse = 1 + Math.sin(G.t * 5) * 0.06;
   ctx.save(); ctx.translate(640, 440); ctx.scale(pulse, pulse);
-  T('PRESS SPACE TO START', 0, 0, 56, '#ff4d6d', { align: 'center', base: 'middle', lw: 10 });
+  T('PRESS SPACE TO PICK A LEVEL', 0, 0, 56, '#ff4d6d', { align: 'center', base: 'middle', lw: 10 });
   ctx.restore();
   T('Q = FREE-PLAY JAM MODE', 640, 500, 30, '#69db7c', { align: 'center', base: 'middle', lw: 6 });
   T('M = mute', 1250, 700, 22, '#fff', { align: 'right', base: 'middle', lw: 5 });
@@ -1073,6 +1085,51 @@ function drawJam() {
   drawFx();
 }
 
+// ───────────────────────── level map ─────────────────────────
+const MAP_NODES = [[220, 560], [500, 400], [800, 520], [1080, 340]];
+const MAP_COL = { alley: '#5b3f8c', disco: '#ff4fd8', lab: '#1fb5c9', volcano: '#ff6b35' };
+function drawMap() {
+  const t = G.t;
+  // land
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#8fd3ff'); g.addColorStop(0.35, '#bde8ff'); g.addColorStop(0.36, '#7ccf6b'); g.addColorStop(1, '#4fa65a');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.ellipse(120 + i * 230, 262, 170, 50, 0, Math.PI, 0); ctx.fillStyle = i % 2 ? '#6cbf5d' : '#5fb352'; ctx.fill(); }
+  for (let i = 0; i < 4; i++) { const x = ((i * 340 + t * 18) % (W + 200)) - 100; ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.ellipse(x, 70 + i * 22, 60, 20, 0, 0, Math.PI * 2); ctx.ellipse(x + 40, 60 + i * 22, 40, 22, 0, 0, Math.PI * 2); ctx.fill(); }
+  // regions
+  BOSSES.forEach((b, i) => { const [x, y] = MAP_NODES[i]; ctx.beginPath(); ctx.ellipse(x, y + 10, 150, 70, 0, 0, Math.PI * 2); ctx.fillStyle = MAP_COL[b.stage]; ctx.globalAlpha = 0.35; ctx.fill(); ctx.globalAlpha = 1; });
+  // dashed path, starting from the garage
+  ctx.save(); ctx.setLineDash([18, 14]); ctx.lineDashOffset = -t * 40; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.strokeStyle = '#fff3c4';
+  ctx.beginPath(); ctx.moveTo(60, 680);
+  [[60, 680], ...MAP_NODES].forEach(([x, y], i, a) => { if (i) { const [px, py] = a[i - 1]; ctx.quadraticCurveTo((px + x) / 2, Math.min(py, y) - 90, x, y); } });
+  ctx.stroke(); ctx.restore();
+  T('GARAGE', 70, 650, 26, '#fff', { align: 'left', base: 'middle', lw: 5 });
+  // nodes
+  BOSSES.forEach((b, i) => {
+    const [x, y] = MAP_NODES[i], sel = i === G.mapSel, beat = G.beaten.has(i);
+    const pulse = sel ? 1 + Math.sin(t * 6) * 0.06 : 1;
+    ctx.save(); ctx.translate(x, y); ctx.scale(pulse, pulse);
+    ctx.beginPath(); ctx.ellipse(0, 0, 80, 30, 0, 0, Math.PI * 2); ctx.fillStyle = MAP_COL[b.stage]; ctx.fill();
+    ctx.lineWidth = sel ? 8 : 5; ctx.strokeStyle = sel ? '#ffd43b' : OUT; ctx.stroke();
+    ctx.restore();
+    const a = newAnim(); if (sel) a[DRUMS[Math.floor(t * 4) % 4]] = 1 - ((t * 4) % 1);
+    A.drawBoss(ctx, b.key, x, y + 6, a, t + i, t * 2 + i * 0.3, bossScale(b.key) * 0.36);
+    T(`${i + 1}. ${b.name}`, x, y + 56, sel ? 34 : 28, sel ? '#ffd43b' : '#fff', { align: 'center', base: 'middle', lw: 7 });
+    T('★'.repeat(i + 1) + '☆'.repeat(3 - i), x, y + 88, 22, '#ffd43b', { align: 'center', base: 'middle', lw: 5 });
+    if (beat) T('BEATEN!', x + 70, y - 120, 26, '#69db7c', { align: 'center', base: 'middle', lw: 6 });
+  });
+  // hero hops to the selected node
+  const [hx, hy] = MAP_NODES[G.mapSel];
+  A.drawHero(ctx, hx - 105, hy + 12 - Math.abs(Math.sin(t * 5)) * 12, newAnim(), t, t * 2, 0.3);
+  // UI
+  ctx.save(); ctx.translate(640, 70); ctx.rotate(Math.sin(t * 2) * 0.03);
+  T('PICK YOUR FIGHT!', 0, 0, 80, '#ffd43b', { align: 'center', base: 'middle', lw: 12 });
+  ctx.restore();
+  const b = BOSSES[G.mapSel];
+  panel(390, 130, 500, 70, 'rgba(22,12,44,0.85)', 16);
+  T(`${b.title}  ·  ${b.bpm} BPM`, 640, 165, 30, '#fff', { align: 'center', base: 'middle', lw: 6 });
+  T('←/→ choose   ·   SPACE fight   ·   click a boss   ·   ESC back', 640, 700, 24, '#fff', { align: 'center', base: 'middle', lw: 5 });
+}
+
 // ───────────────────────── main loop ─────────────────────────
 function update(dt) {
   decay(G.hero, dt); decay(G.boss, dt);
@@ -1104,6 +1161,7 @@ function draw() {
     case 'defeat': drawResult(false); break;
     case 'champion': drawChampion(); break;
     case 'jam': drawJam(); break;
+    case 'map': drawMap(); break;
     default: break;
   }
   ctx.restore();
